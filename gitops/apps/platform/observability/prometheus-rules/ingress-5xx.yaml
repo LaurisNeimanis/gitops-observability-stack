@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: platform-ingress-5xx
+  namespace: observability
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: ingress
+      rules:
+        - alert: Ingress5xxHigh
+          expr: sum(rate(traefik_service_requests_total{code=~"5.."}[5m])) > 1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Ingress 5xx errors"
+            description: "High rate of 5xx responses on Traefik ingress"

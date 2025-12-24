@@ -1,0 +1,168 @@
+# =========================================================
+# Grafana Alloy (Helm)
+# Chart: alloy 1.5.1
+# Alloy: v1.12.x
+# Mode: DaemonSet
+# Purpose: Kubernetes pod logs -> Loki
+# =========================================================
+
+controller:
+  type: daemonset
+
+rbac:
+  create: true
+
+serviceAccount:
+  create: true
+  name: alloy
+
+alloy:
+  # -------------------------------------------------------
+  # Alloy configuration (Alloy DSL)
+  # NOTE:
+  # - YAML comments use '#'
+  # - Alloy comments inside `content` MUST use '//'
+  # -------------------------------------------------------
+  configMap:
+    create: true
+    content: |
+      // ===================================================
+      // Global Alloy logging configuration
+      // ===================================================
+      logging {
+        level = "info"
+      }
+
+      // ===================================================
+      // Kubernetes pod discovery
+      // Discovers all pods running in the cluster
+      // ===================================================
+      discovery.kubernetes "pods" {
+        role = "pod"
+      }
+
+      // ===================================================
+      // Relabeling stage
+      // - Normalizes Kubernetes metadata into Loki labels
+      // - Defines log file paths on the node filesystem
+      // ===================================================
+      discovery.relabel "pod_logs" {
+        targets = discovery.kubernetes.pods.targets
+
+        // Kubernetes namespace -> Loki label
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+
+        // Pod name -> Loki label
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+
+        // Container name -> Loki label
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+
+        // Job label = namespace/pod
+        rule {
+          source_labels = ["__meta_kubernetes_namespace", "__meta_kubernetes_pod_name"]
+          separator     = "/"
+          target_label  = "job"
+        }
+
+        // Resolve log file path on the node
+        // /var/log/pods/<ns>_<pod>_<uid>/<container>/*.log
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          replacement   = "/var/log/pods/*/*$1/*.log"
+          target_label  = "__path__"
+        }
+
+        // Detect container runtime (docker or containerd)
+        // Stored temporarily for conditional parsing
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_id"]
+          regex         = "^(\\w+):\\/\\/.+$"
+          replacement   = "$1"
+          target_label  = "tmp_container_runtime"
+        }
+      }
+
+      // ===================================================
+      // Match only existing log files
+      // Prevents Alloy from trying to read non-existent paths
+      // ===================================================
+      local.file_match "pod_logs" {
+        path_targets = discovery.relabel.pod_logs.output
+      }
+
+      // ===================================================
+      // Tail log files from the node filesystem
+      // ===================================================
+      loki.source.file "pod_logs" {
+        targets    = local.file_match.pod_logs.targets
+        forward_to = [loki.process.pod_logs.receiver]
+      }
+
+      // ===================================================
+      // Log processing pipeline
+      // ===================================================
+      loki.process "pod_logs" {
+
+        // Parse CRI-formatted logs (containerd / CRI-O)
+        stage.match {
+          selector = "{tmp_container_runtime=\"containerd\"}"
+          stage.cri {}
+        }
+
+        // Parse Docker JSON logs
+        stage.match {
+          selector = "{tmp_container_runtime=\"docker\"}"
+          stage.docker {}
+        }
+
+        // Drop high-cardinality / technical labels
+        stage.label_drop {
+          values = ["tmp_container_runtime", "pod_uid"]
+        }
+
+        forward_to = [loki.write.default.receiver]
+      }
+
+      // ===================================================
+      // Loki output destination
+      // ===================================================
+      loki.write "default" {
+        endpoint {
+          url = "http://loki.observability.svc.cluster.local:3100/loki/api/v1/push"
+        }
+      }
+
+  # -------------------------------------------------------
+  # Mount host /var/log into Alloy pods
+  # Required for reading pod log files
+  # -------------------------------------------------------
+  mounts:
+    varlog: true
+
+  # -------------------------------------------------------
+  # Clustering disabled (not needed for log collection)
+  # -------------------------------------------------------
+  clustering:
+    enabled: false
+
+# ---------------------------------------------------------
+# Resource limits
+# Conservative defaults for log-only Alloy DaemonSet
+# ---------------------------------------------------------
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi

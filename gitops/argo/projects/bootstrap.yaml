@@ -1,0 +1,14 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: bootstrap
+  namespace: argocd
+spec:
+  description: Bootstrap project (root app only)
+
+  sourceRepos:
+    - https://github.com/LaurisNeimanis/gitops-observability-stack.git
+
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: argocd

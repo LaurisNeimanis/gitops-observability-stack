@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ingress-5xx.yaml
+  - ingress-5xx-per-service.yaml
+  - test-custom-alert.yaml
+
+commonLabels:
+  release: kube-prometheus-stack

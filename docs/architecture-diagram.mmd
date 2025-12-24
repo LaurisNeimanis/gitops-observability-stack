@@ -1,0 +1,85 @@
+flowchart TB
+    %% =========================
+    %% External Infrastructure
+    %% =========================
+    subgraph TF["Terraform IaC (External, Authoritative)"]
+        EKS["EKS Cluster"]
+        S3["S3 Buckets<br/>Loki Object Storage"]
+        IAM["IAM Roles & Policies"]
+        PV["StorageClasses<br/>(gp3)"]
+    end
+
+    %% =========================
+    %% GitOps Control Plane
+    %% =========================
+    subgraph GIT["Git Repository<br/>gitops-observability-stack"]
+        CRDS["Prometheus Operator CRDs"]
+        APPS["Argo Applications"]
+        RULES["PrometheusRule Manifests"]
+        VALUES["Helm Values"]
+    end
+
+    subgraph ARGO["Argo CD"]
+        ROOT["Root Application"]
+        CRD_APP["platform-crds<br/>(sync-wave -1)"]
+        OBS_APP["Observability Applications"]
+    end
+
+    %% =========================
+    %% Observability Namespace
+    %% =========================
+    subgraph OBS["Namespace: observability"]
+        PROM["Prometheus"]
+        AM["Alertmanager"]
+        GRAF["Grafana"]
+        LOKI["Loki<br/>SingleBinary"]
+        ALLOY["Grafana Alloy<br/>DaemonSet"]
+    end
+
+    %% =========================
+    %% Kubernetes Workloads
+    %% =========================
+    subgraph K8S["Kubernetes Workloads"]
+        PODS["Application Pods"]
+        NODELOGS["/var/log/pods/*"]
+        METRICS["/metrics endpoints"]
+    end
+
+    %% =========================
+    %% GitOps Flow
+    %% =========================
+    GIT --> ROOT
+    ROOT --> CRD_APP
+    ROOT --> OBS_APP
+
+    CRD_APP --> CRDS
+    OBS_APP --> PROM
+    OBS_APP --> AM
+    OBS_APP --> GRAF
+    OBS_APP --> LOKI
+    OBS_APP --> ALLOY
+    OBS_APP --> RULES
+
+    %% =========================
+    %% Metrics Pipeline
+    %% =========================
+    PODS --> METRICS
+    METRICS --> PROM
+    PROM --> AM
+    PROM --> GRAF
+
+    %% =========================
+    %% Logging Pipeline
+    %% =========================
+    PODS --> NODELOGS
+    NODELOGS --> ALLOY
+    ALLOY --> LOKI
+    LOKI --> GRAF
+
+    %% =========================
+    %% Infrastructure Dependencies
+    %% =========================
+    EKS --> OBS
+    S3 --> LOKI
+    IAM --> LOKI
+    PV --> LOKI

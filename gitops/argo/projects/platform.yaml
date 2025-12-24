@@ -1,0 +1,55 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: observability
+  namespace: argocd
+spec:
+  description: Observability stack (Prometheus, Alertmanager, Grafana, Loki, Alloy)
+
+  # --------------------------------------------------
+  # Allowed source repositories
+  # --------------------------------------------------
+  sourceRepos:
+    # GitOps source of truth
+    - https://github.com/LaurisNeimanis/gitops-observability-stack.git
+
+    # Prometheus stack
+    - https://prometheus-community.github.io/helm-charts
+
+    # Grafana / Loki / Alloy
+    - https://grafana.github.io/helm-charts
+
+  # ------------------------------------------------------------------
+  # Allowed destinations
+  # Single cluster, any namespace (platform-level components)
+  # ------------------------------------------------------------------
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: '*'
+
+  # --------------------------------------------------
+  # Cluster-scoped resources (required)
+  # --------------------------------------------------
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRoleBinding
+
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
+
+  # --------------------------------------------------
+  # Namespaced resources
+  # --------------------------------------------------
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'

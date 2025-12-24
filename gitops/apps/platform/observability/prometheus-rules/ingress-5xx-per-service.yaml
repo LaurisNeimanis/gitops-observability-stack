@@ -1,0 +1,33 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: platform-ingress-5xx-per-service
+  namespace: observability
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: ingress-service
+      rules:
+        - alert: Ingress5xxRateHigh
+          expr: |
+            (
+              sum by (service) (
+                rate(traefik_service_requests_total{code=~"5.."}[5m])
+              )
+              /
+              sum by (service) (
+                rate(traefik_service_requests_total[5m])
+              )
+            ) > 0.02
+            and
+            sum by (service) (
+              rate(traefik_service_requests_total[5m])
+            ) > 1
+          for: 5m
+          labels:
+            severity: warning
+            scope: workload
+          annotations:
+            summary: "High 5xx error rate on service"
+            description: "Service {{ $labels.service }} has >2% 5xx responses"

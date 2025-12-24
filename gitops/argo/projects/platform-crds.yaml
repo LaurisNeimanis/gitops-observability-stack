@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform-crds
+  namespace: argocd
+spec:
+  description: Cluster-wide CRDs (bootstrap layer)
+
+  sourceRepos:
+    - https://github.com/LaurisNeimanis/gitops-observability-stack.git
+
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: argocd
+
+  clusterResourceWhitelist:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
