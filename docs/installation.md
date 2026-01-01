@@ -13,6 +13,27 @@ It assumes a **pre-existing Kubernetes cluster** and focuses exclusively on the 
 - Git installed
 - (Optional) `argocd` CLI for local interaction
 
+### Infrastructure prerequisite (mandatory)
+
+This repository assumes that the Kubernetes cluster and all
+infrastructure-level dependencies **already exist** and are provisioned
+outside of this GitOps repository.
+
+A reference, production-aligned implementation is provided here:
+
+https://github.com/LaurisNeimanis/aws-eks-platform
+
+That repository is responsible for provisioning:
+- AWS EKS cluster
+- Worker node groups (capacity baseline: **2× t3.medium**)
+- VPC, subnets, routing, and security groups
+- IAM roles and IRSA bindings
+- StorageClasses (e.g. `gp3`)
+- S3 buckets and access policies required by Loki
+
+This GitOps repository **does not create or modify infrastructure resources**.
+All infrastructure must be in place and functional **before proceeding**.
+
 ---
 
 ## 1. Clone the Repository
@@ -73,9 +94,7 @@ admin
 
 **Password**
 ```bash
-kubectl get secret argocd-initial-admin-secret \
-  -n argocd \
-  -o jsonpath="{.data.password}" | base64 -d
+kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath="{.data.password}" | base64 -d
 ```
 
 ### (Optional) CLI Login
@@ -140,23 +159,48 @@ This ensures **deterministic and reproducible platform state**.
 
 ---
 
-## 7. Configure Grafana Admin Credentials (Required)
+## 7. Post-bootstrap Resource Sanity Check (Required)
+
+After Argo CD has finished reconciling all components,
+verify **node-level resource usage**.
+
+Run:
+
+```bash
+kubectl top nodes
+```
+
+On the documented baseline (**2× t3.medium**), steady-state usage should remain
+below approximately **70% CPU and memory** per node.
+
+Sustained usage above this threshold indicates that the cluster
+does not have sufficient capacity for this observability stack.
+
+This check ensures:
+- Prometheus is not memory-constrained
+- Loki ingestion and compaction are stable
+- No immediate scaling or OOM risk exists
+
+Do **not** proceed with further configuration
+until node-level resource usage is within acceptable limits.
+
+---
+
+## 8. Configure Grafana Admin Credentials (Required)
 
 Grafana is configured to read admin credentials from an **externally managed Kubernetes Secret**.
 
 The secret **must exist before Grafana can be accessed**:
 
 ```bash
-kubectl -n observability create secret generic grafana-admin \
-  --from-literal=admin-user=admin \
-  --from-literal=admin-password='CHANGE_ME'
+kubectl -n observability create secret generic grafana-admin --from-literal=admin-user=admin --from-literal=admin-password='CHANGE_ME'
 ```
 
 Grafana access will not be available until this secret exists.
 
 ---
 
-## 8. Configure Alertmanager Slack Webhooks (Required)
+## 9. Configure Alertmanager Slack Webhooks (Required)
 
 Alertmanager requires **valid Slack Incoming Webhook URLs** to deliver notifications.
 
@@ -176,7 +220,7 @@ After updating the files, **commit and push** the changes so Argo CD can reconci
 
 ---
 
-## 9. (Optional) Access Platform Components
+## 10. (Optional) Access Platform Components
 
 These steps are **not required for installation**, but useful for validation and demos.
 
@@ -242,3 +286,4 @@ This bootstrap flow is designed to be:
 - deterministic
 - production-aligned
 
+For full platform context and infrastructure details, review the infrastructure repository.

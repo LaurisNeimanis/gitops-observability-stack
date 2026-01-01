@@ -29,6 +29,60 @@ Some configurations are intentionally simplified to ensure:
 
 ---
 
+## Minimum Cluster Requirements (Observability Stack)
+
+This repository assumes a **pre-existing Kubernetes cluster**
+with sufficient capacity to run a full observability stack.
+
+The following baseline has been validated to reliably run
+all components defined in this repository.
+
+### Baseline (dev / evaluation / non-production)
+
+- **Worker nodes**
+  - Instance types: `t3.medium` (primary), `t3a.medium` (capacity fallback)
+  - Node count: **2**
+- **Total capacity**
+  - vCPU: 4
+  - Memory: 8 GiB
+
+### Workloads covered by this baseline
+
+This baseline is sufficient for:
+
+- Prometheus (`kube-prometheus-stack`)
+- Alertmanager
+- Grafana
+- Loki (SingleBinary mode)
+- Grafana Alloy (DaemonSet)
+- CRDs and controllers reconciled by Argo CD
+
+It supports:
+- steady-state metrics and log ingestion
+- short-lived reconciliation and compaction bursts
+- interactive Grafana usage for review and demos
+
+### Notes and limitations
+
+- **Single-node clusters are not supported**
+  - Prometheus scheduling and resharding may fail
+  - Loki compaction and ingestion become unstable
+- Smaller instance types (e.g. `t3.small`) may:
+  - cause OOM kills during Prometheus startup
+  - throttle Loki under moderate log volume
+- This baseline is **not intended for high-ingest production workloads**
+
+Production sizing depends on:
+- log volume
+- retention period
+- scrape frequency
+- alert cardinality
+
+Production capacity planning is intentionally
+**out of scope for this repository**.
+
+---
+
 ## Architectural Principles
 
 The architecture prioritizes:
@@ -69,7 +123,7 @@ flowchart TD
 > The full, production-level architecture diagram (including GitOps control flow,
 > CRD lifecycle, metrics and logging pipelines) is available here:
 >
-> ➡️ [docs/architecture-diagram.mmd](docs/architecture-diagram.mmd)
+> [docs/architecture-diagram.mmd](docs/architecture-diagram.mmd)
 
 ---
 
@@ -148,7 +202,7 @@ Some infrastructure components required by this observability stack are
 **intentionally not provisioned here**, including:
 - S3 buckets and access policies for Loki object storage
 - Kubernetes StorageClasses (e.g. gp3) used by stateful workloads
-- Workload- and backend-specific IAM permissions for logs and metrics
+- Workload and backend-specific IAM permissions for logs and metrics
 
 These components are treated as **explicit external dependencies**, not hidden
 assumptions, ensuring a clear separation between infrastructure provisioning
@@ -203,7 +257,7 @@ This repository assumes a **pre-existing Kubernetes cluster** and Argo CD contro
 
 The full bootstrap flow is documented separately:
 
-➡️ **[Installation & Bootstrap](docs/installation.md)**
+**[Installation & Bootstrap](docs/installation.md)**
 
 ---
 
@@ -226,7 +280,7 @@ grafana:
 ```
 Refer to the installation guide for secret creation details:
 
-➡️ **[Installation & Bootstrap](docs/installation.md)**
+**[Installation & Bootstrap](docs/installation.md)**
 
 ### Production Considerations
 
